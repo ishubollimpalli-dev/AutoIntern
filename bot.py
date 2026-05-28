@@ -1,10 +1,14 @@
-import requests
-import json
+import os
 import logging
 import sqlite3
 import pypdf
+import requests
+from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
+
+# 1. Load the environment variables from your .env file
+load_dotenv()
 
 # Setup basic logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -42,11 +46,11 @@ def extract_text_from_pdf(file_path):
     except Exception as e:
         return f"Parsing Error: {str(e)}"
 
-# --- MAIN DOCUMENT DOWNLOAD & ANALYSIS HANDLER ---
+# --- LOCAL OLLAMA AI HELPER ---
 def query_local_llm(prompt_text):
     url = "http://localhost:11434/api/generate"
     payload = {
-        "model": "llama3", # Ensure you have pulled this model in Ollama
+        "model": "llama3", 
         "prompt": prompt_text,
         "stream": False
     }
@@ -56,13 +60,14 @@ def query_local_llm(prompt_text):
         return response.json().get("response", "Error: AI generation failed.")
     except Exception as e:
         return f"Backend Error: Ensure Ollama is running locally. Details: {str(e)}"
+
+# --- MAIN DOCUMENT DOWNLOAD & ANALYSIS HANDLER ---
 async def handle_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_profile = get_user_data(user_id)
     
-    # --- STEP 3: THE REVENUE GATE (PAYMENT BUTTON) ---
+    # --- REVENUE GATE (PAYMENT BUTTON) ---
     if not user_profile["is_premium"] and user_profile["resume_count"] >= 1:
-        # Build the inline button
         keyboard = [
             [InlineKeyboardButton("Unlock Premium (₹149)", url="https://example.com/payment-placeholder")]
         ]
@@ -81,15 +86,19 @@ async def handle_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     processing_msg = await update.message.reply_text("📥 Analyzing resume... This may take a few seconds.")
 
+    # Download the file
     tg_file = await update.message.document.get_file()
+    
+    # Ensure the downloads directory exists
+    os.makedirs('downloads', exist_ok=True)
     saved_file_path = f"downloads/{user_id}_resume.pdf"
     await tg_file.download_to_drive(saved_file_path)
 
+    # Extract text
     extracted_text = extract_text_from_pdf(saved_file_path)
     
-    # --- STEP 2: EDGE CASE HANDLING (SCANNED PDFS) ---
-    # If pypdf extracts nothing, or just a few garbage characters
-    if not extracted_text or len(extracted_text.strip()) < 30:
+    # --- EDGE CASE HANDLING (SCANNED PDFS) ---
+    if not extracted_text or len(extracted_text.strip()) < 50:
         await processing_msg.edit_text(
             "❌ Error: Cannot read text from this document. It appears to be an image-based or scanned PDF. "
             "Please upload a standard text-based PDF."
@@ -108,11 +117,10 @@ async def handle_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     increment_user_count(user_id)
     
-    # --- STEP 1: EXECUTE THE LLM ---
-    # Call the local Ollama function you built above
+    # --- EXECUTE THE LLM ---
     ai_analysis = query_local_llm(system_prompt)
     
-    # Edit the original "Processing" message with the final AI output
+    # Send result to user
     await processing_msg.edit_text(ai_analysis)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -120,9 +128,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- INITIALIZATION ENGINE ---
 def main():
-    # Input your specific active Telegram API Bot Token here
-    BOT_TOKEN = "8343891625:AAH3UqLSJ6rxEYbJRPa3OI0D7GPW-BJUCYU"
+    # Safely read the token from the hidden .env file
+    BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     
+    if not BOT_TOKEN:
+        print("CRITICAL ERROR: TELEGRAM_BOT_TOKEN not found in .env file.")
+        return
+
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Handle the basic entry command
