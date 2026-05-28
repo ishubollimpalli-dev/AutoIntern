@@ -50,7 +50,7 @@ def extract_text_from_pdf(file_path):
 def query_local_llm(prompt_text):
     url = "http://localhost:11434/api/generate"
     payload = {
-        "model": "llama3", 
+        "model": "phi3", 
         "prompt": prompt_text,
         "stream": False
     }
