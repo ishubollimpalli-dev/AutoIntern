@@ -106,12 +106,13 @@ async def handle_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     system_prompt = (
-        "You are an elite ATS (Applicant Tracking System) Analyzer.\n"
-        "Analyze the raw resume text provided below and strictly return your findings inside this layout structure:\n\n"
-        "1. ATS Score: (Out of 100)\n"
-        "2. Missing Keywords: (List 3 critical skills missing based on standard tech roles)\n"
-        "3. Formatting Red Flags: (Identify spacing or layout extraction issues)\n"
-        "4. Final Verdict: (One sentence defining candidate job readiness)\n\n"
+        "You are a strict, professional ATS Analyzer. "
+        "Analyze the candidate's resume and return ONLY the following 4 points. "
+        "Do not include any extra introductory or concluding text. Do not generate tags or endorsement text.\n\n"
+        "1. ATS Score: [Provide a single number out of 100, e.g., 75/100]\n"
+        "2. Missing Keywords: [List exactly 3 missing technical keywords]\n"
+        "3. Formatting Red Flags: [1 short sentence on layout issues, or 'None']\n"
+        "4. Final Verdict: [1 short sentence summarizing job readiness]\n\n"
         f"Candidate Resume Text:\n{extracted_text}"
     )
 
